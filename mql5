@@ -1,0 +1,97 @@
+mql5
+//+------------------------------------------------------------------+
+//|                                            Ice Breakeven EA.mq5 |
+//|                     Copyright 2022, Forex Robot Easy Team        |
+//|                           http://www.forexroboteasy.com           |
+//+------------------------------------------------------------------+
+
+//+------------------------------------------------------------------+
+//| Expert initialization function                                   |
+//+------------------------------------------------------------------+
+int OnInit()
+{
+    // Set profit securing trigger point in points
+    int triggerPoint = 100;
+
+    // Set percentage of lots to close at breakeven
+    double lotsPercentage = 50.0;
+
+    // Set buffer distance for adjusting stop loss
+    int stopLossBuffer = 20;
+
+    // Set volume of lots to open the position
+    double lotsVolume = 0.1;
+
+    // Calculate breakeven price
+    double breakevenPrice = NormalizeDouble(SymbolInfoDouble(Symbol(), SYMBOL_ASK) - triggerPoint * Point, Digits);
+
+    // Calculate stop loss price
+    double stopLossPrice = NormalizeDouble(SymbolInfoDouble(Symbol(), SYMBOL_BID) - stopLossBuffer * Point, Digits);
+
+    // Open a position with specified volume
+    if (OrderSend(Symbol(), OP_BUY, lotsVolume, SymbolInfoDouble(Symbol(), SYMBOL_ASK), 0, stopLossPrice, breakevenPrice, 'Breakeven EA', 0, 0, Green))
+    {
+        Print('Position opened successfully');
+    }
+    else
+    {
+        Print('Failed to open position');
+    }
+
+    return(INIT_SUCCEEDED);
+}
+
+//+------------------------------------------------------------------+
+//| Expert tick function                                             |
+//+------------------------------------------------------------------+
+void OnTick()
+{
+    // Check if position is open
+    if (PositionsTotal() > 0)
+    {
+        // Get position ticket
+        ulong positionTicket = PositionGetTicket(0);
+
+        // Get position type
+        ENUM_POSITION_TYPE positionType = PositionGetString(POSITION_TYPE);
+
+        // Get current price
+        double currentPrice = NormalizeDouble(SymbolInfoDouble(Symbol(), SYMBOL_BID), Digits);
+
+        // Check if price reached the breakeven trigger point
+        if ((positionType == POSITION_TYPE_BUY && currentPrice >= breakevenPrice) ||
+            (positionType == POSITION_TYPE_SELL && currentPrice <= breakevenPrice))
+        {
+            // Calculate lots to close at breakeven
+            double lotsToClose = PositionGetDouble(POSITION_VOLUME) * lotsPercentage / 100.0;
+
+            // Close a percentage of lots at breakeven
+            if (OrderClosePartial(positionTicket, lotsToClose, currentPrice, 3, Red))
+            {
+                Print('Partial position closed at breakeven');
+            }
+            else
+            {
+                Print('Failed to close partial position at breakeven');
+            }
+        }
+    }
+}
+
+//+------------------------------------------------------------------+
+//| Expert deinitialization function                                 |
+//+------------------------------------------------------------------+
+void OnDeinit(const int reason)
+{
+    // Close all remaining positions
+    while (PositionsTotal() > 0)
+    {
+        if (!PositionSelectByIndex(0))
+            break;
+
+        ulong positionTicket = PositionGetTicket(0);
+
+        if (!OrderClose(positionTicket, PositionGetDouble(POSITION_VOLUME), SymbolInfoDouble(Symbol(), SYMBOL_BID), 3, Red))
+            break;
+    }
+}
